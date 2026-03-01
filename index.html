@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Hub P2P de Audio</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 20px; background: #f4f4f9; }
+        .container { max-width: 400px; margin: auto; background: white; padding: 20px; border-radius: 8px; shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        input { width: 80%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 10px 20px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
+        button:hover { background: #0056b3; }
+        #status { margin-top: 15px; font-weight: bold; color: #555; }
+        .audio-list { margin-top: 20px; text-align: left; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Hub de Audio P2P</h2>
+    <p>Tu ID: <span id="my-id">...</span></p>
+    
+    <input type="text" id="remote-id" placeholder="ID del par a llamar">
+    <button onclick="makeCall()">Llamar</button>
+    
+    <div id="status">Esperando conexión...</div>
+    <div class="audio-list" id="audios"></div>
+</div>
+
+<!-- Incluimos la librería PeerJS desde un CDN -->
+<script src="https://unpkg.com"></script>
+
+<script>
+    const statusDiv = document.getElementById('status');
+const audioContainer = document.getElementById('audios');
+const roomName = "SALA-PRUEBA-123"; // Todos los que tengan este nombre entrarán a la misma sala
+let localStream;
+let peersConectados = {};
+
+// 1. Obtener Micrófono
+navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    localStream = stream;
+    
+    // 2. Unirse a la sala con un ID personalizado: "SALA-PRUEBA-123_UsuarioID"
+    const myId = roomName + "_" + Math.floor(Math.random() * 10000);
+    const peer = new Peer(myId);
+
+    peer.on('open', (id) => {
+        statusDiv.innerText = "En línea en: " + roomName;
+        document.getElementById('my-id').innerText = id;
+        
+        // 3. AUTO-DESCUBRIMIENTO:
+        // En un entorno real, aquí usarías una base de datos (como Firebase) 
+        // para listar quién está en la sala. 
+        // Para este ejemplo, puedes añadir un botón "Escanear Sala" o 
+        // conectar manualmente con el ID que te pasen.
+    });
+
+    // 4. ESCUCHAR LLAMADAS ENTRANTES
+    peer.on('call', call => {
+        call.answer(localStream);
+        gestionarStreamEntrante(call);
+    });
+
+    // Función para conectar con alguien
+    window.conectarAPar = (remoteId) => {
+        if (remoteId === myId || peersConectados[remoteId]) return;
+        const call = peer.call(remoteId, localStream);
+        gestionarStreamEntrante(call);
+    };
+
+}).catch(err => statusDiv.innerText = "Error de mic: " + err);
+
+function gestionarStreamEntrante(call) {
+    call.on('stream', remoteStream => {
+        if (document.getElementById(call.peer)) return;
+        
+        const audio = document.createElement('audio');
+        audio.id = call.peer;
+        audio.srcObject = remoteStream;
+        audio.autoplay = true;
+        audioContainer.appendChild(audio);
+        peersConectados[call.peer] = call;
+    });
+}
+
+</script>
+</body>
+</html>
