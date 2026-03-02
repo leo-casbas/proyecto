@@ -5,15 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FM VICTORIA 103.3</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; text-align: center; padding: 20px; background: #f0f2f5; }
+        body { font-family: sans-serif; text-align: center; padding: 20px; background: #f0f2f5; }
         .container { max-width: 450px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        .my-id-box { background: #e7f3ff; padding: 10px; border-radius: 5px; margin: 15px 0; font-weight: bold; color: #007bff; border: 1px dashed #007bff; cursor: pointer; }
-        input { width: 90%; padding: 12px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
-        button { padding: 12px; cursor: pointer; border: none; border-radius: 6px; font-size: 16px; width: 100%; margin-bottom: 10px; transition: 0.3s; }
-        .btn-call { background: #28a745; color: white; }
-        .btn-hangup { background: #dc3545; color: white; display: none; }
-        .btn-mic { background: #007bff; color: white; }
-        #status { margin-top: 15px; font-size: 0.9em; color: #666; }
+        .id-box { background: #e7f3ff; padding: 15px; border-radius: 8px; margin: 15px 0; font-weight: bold; color: #007bff; border: 2px dashed #007bff; }
+        button { padding: 15px; cursor: pointer; border: none; border-radius: 8px; font-size: 16px; width: 100%; margin-bottom: 10px; color: white; background: #007bff; }
+        .btn-call { background: #28a745; }
+        #error-log { color: #dc3545; background: #f8d7da; padding: 10px; display: none; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -21,126 +18,25 @@
 <div class="container">
     <h2>FM VICTORIA 103.3</h2>
     
-    <div id="setup-step">
-        <p>Haz clic para iniciar el sistema:</p>
-        <button class="btn-mic" onclick="activarMicofono()">Activar Micrófono</button>
+    <div id="setup">
+        <button onclick="activarMicofono()">INICIAR SISTEMA</button>
     </div>
 
-    <div id="main-step" style="display:none;">
-        <p>Tu ID de conexión (toca para copiar):</p>
-        <div class="my-id-box" id="my-id" onclick="copiarID()">Generando...</div>
-
-        <input type="text" id="remote-id" placeholder="ID de la otra persona">
-        
-        <button id="btn-call" class="btn-call" onclick="makeCall()">Llamar</button>
-        <button id="btn-hangup" class="btn-hangup" onclick="hangUp()">Finalizar Llamada</button>
-        
-        <div id="status">Conectado a la red</div>
-        <div id="audios" style="display:none;"></div>
+    <div id="panel" style="display:none;">
+        <p>Tu ID:</p>
+        <div class="id-box" id="my-id">CONECTANDO...</div>
+        <input type="text" id="peer-id" placeholder="ID destino" style="width:90%; padding:10px; margin-bottom:10px;">
+        <button class="btn-call" onclick="realizarLlamada()">LLAMAR</button>
     </div>
+
+    <div id="error-log"></div>
+    <div id="audios"></div>
 </div>
 
-<!-- ESTA LÍNEA ES LA QUE ESTABA MAL, AHORA ESTÁ CORREGIDA -->
+<!-- CARGA DE LIBRERÍA -->
 <script src="https://unpkg.com"></script>
+<!-- CARGA DE TU SCRIPT EXTERNO -->
+<script src="script.js"></script>
 
-<script>
-    const statusDiv = document.getElementById('status');
-    const audioContainer = document.getElementById('audios');
-    const btnCall = document.getElementById('btn-call');
-    const btnHangup = document.getElementById('btn-hangup');
-    
-    let localStream;
-    let peer;
-    let currentCall;
-
-    async function activarMicofono() {
-        try {
-            // 1. Pedir micrófono
-            localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            
-            // 2. Cambiar de pantalla
-            document.getElementById('setup-step').style.display = 'none';
-            document.getElementById('main-step').style.display = 'block';
-            
-            // 3. Iniciar conexión
-            inicializarPeer();
-        } catch (err) {
-            console.error(err);
-            alert("Error: Debes permitir el micrófono para que el sistema funcione.");
-        }
-    }
-
-    function inicializarPeer() {
-        // Aquí Peer ya existe porque cargamos la librería correctamente arriba
-        peer = new Peer();
-
-        peer.on('open', (id) => {
-            document.getElementById('my-id').innerText = id;
-            statusDiv.innerText = "Listo para conectar";
-        });
-
-        peer.on('call', (call) => {
-            if(confirm("¿Recibir llamada?")) {
-                call.answer(localStream);
-                gestionarStream(call);
-            }
-        });
-
-        peer.on('error', (err) => {
-            statusDiv.innerText = "Error de red: " + err.type;
-        });
-    }
-
-    function makeCall() {
-        const rId = document.getElementById('remote-id').value;
-        if (!rId) return alert("Ingresa un ID");
-        
-        statusDiv.innerText = "Llamando...";
-        const call = peer.call(rId, localStream);
-        gestionarStream(call);
-    }
-
-    function gestionarStream(call) {
-        currentCall = call;
-        btnCall.style.display = "none";
-        btnHangup.style.display = "block";
-
-        call.on('stream', (remoteStream) => {
-            if (document.getElementById("remote-audio")) return;
-            const audio = document.createElement('audio');
-            audio.id = "remote-audio";
-            audio.srcObject = remoteStream;
-            audio.autoplay = true;
-            audio.setAttribute('playsinline', 'true');
-            audioContainer.appendChild(audio);
-            statusDiv.innerText = "¡En línea!";
-        });
-
-        call.on('close', limpiarLlamada);
-    }
-
-    function hangUp() {
-        if (currentCall) {
-            currentCall.close();
-            limpiarLlamada();
-        }
-    }
-
-    function limpiarLlamada() {
-        const audioEl = document.getElementById("remote-audio");
-        if (audioEl) audioEl.remove();
-        btnCall.style.display = "block";
-        btnHangup.style.display = "none";
-        statusDiv.innerText = "Llamada finalizada.";
-        currentCall = null;
-    }
-
-    function copiarID() {
-        const idText = document.getElementById('my-id').innerText;
-        navigator.clipboard.writeText(idText).then(() => {
-            alert("ID copiado al portapapeles");
-        });
-    }
-</script>
 </body>
 </html>
