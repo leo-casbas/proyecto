@@ -2,6 +2,9 @@ let localStream;
 let peer;
 let currentCall;
 
+// Puedes editar este ID fijo según lo que necesites.
+const FIXED_ID = "fmvictoria";
+
 async function activarMicofono() {
     const log = document.getElementById('error-log');
     const idDisplay = document.getElementById('my-id');
@@ -11,8 +14,8 @@ async function activarMicofono() {
         document.getElementById('setup').style.display = 'none';
         document.getElementById('panel').style.display = 'block';
 
-        // Configuración para saltar bloqueos
-        peer = new Peer(undefined, {
+        // Peer con ID fijo
+        peer = new Peer(FIXED_ID, {
             host: '0.peerjs.com',
             port: 443,
             secure: true,
@@ -24,12 +27,12 @@ async function activarMicofono() {
         });
 
         peer.on('error', (err) => {
-            document.getElementById('error-log').style.display = 'block';
-            document.getElementById('error-log').innerText = "Error: " + err.type;
+            log.style.display = 'block';
+            log.innerText = "Error: " + err.type + " (" + err.message + ")";
         });
 
         peer.on('call', (call) => {
-            if(confirm("¿Aceptar llamada?")) {
+            if (confirm("¿Aceptar llamada?")) {
                 call.answer(localStream);
                 gestionarStream(call);
             }
@@ -41,15 +44,16 @@ async function activarMicofono() {
 }
 
 function realizarLlamada() {
-    const idDestino = document.getElementById('peer-id').value;
-    if(!idDestino) return alert("Ingresa un ID");
+    const idDestino = document.getElementById('peer-id').value.trim();
+    if (!idDestino) return alert("Ingresa un ID de destino válido.");
+
     const call = peer.call(idDestino, localStream);
     gestionarStream(call);
 }
 
 function gestionarStream(call) {
     call.on('stream', (remoteStream) => {
-        if(document.getElementById('remote-audio')) return;
+        if (document.getElementById('remote-audio')) return;
         const audio = document.createElement('audio');
         audio.id = 'remote-audio';
         audio.srcObject = remoteStream;
