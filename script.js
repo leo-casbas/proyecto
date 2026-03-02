@@ -1,9 +1,18 @@
+// =========================
+// CONFIGURACIÓN DEL PUNTO
+// =========================
+// Punto A (estudio):
+// const FIXED_ID = "fmvictoria";
+//
+// Punto B (remoto):
+// const FIXED_ID = "remoto";
+//
+const FIXED_ID = "fmvictoria";  // <-- CAMBIAR A "remoto" EN EL PUNTO B
+// =========================
+
 let localStream;
 let peer;
 let currentCall;
-
-// Puedes editar este ID fijo según lo que necesites.
-const FIXED_ID = "fmvictoria";
 
 async function activarMicofono() {
     const log = document.getElementById('error-log');
@@ -11,10 +20,10 @@ async function activarMicofono() {
 
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
         document.getElementById('setup').style.display = 'none';
         document.getElementById('panel').style.display = 'block';
 
-        // Peer con ID fijo
         peer = new Peer(FIXED_ID, {
             host: '0.peerjs.com',
             port: 443,
@@ -28,11 +37,11 @@ async function activarMicofono() {
 
         peer.on('error', (err) => {
             log.style.display = 'block';
-            log.innerText = "Error: " + err.type + " (" + err.message + ")";
+            log.innerText = "Error: " + err.type + " (" + (err.message || "") + ")";
         });
 
         peer.on('call', (call) => {
-            if (confirm("¿Aceptar llamada?")) {
+            if (confirm("¿Aceptar llamada de " + call.peer + "?")) {
                 call.answer(localStream);
                 gestionarStream(call);
             }
@@ -45,21 +54,40 @@ async function activarMicofono() {
 
 function realizarLlamada() {
     const idDestino = document.getElementById('peer-id').value.trim();
-    if (!idDestino) return alert("Ingresa un ID de destino válido.");
+    if (!idDestino) {
+        alert("Ingresa un ID de destino válido.");
+        return;
+    }
+
+    if (!peer || peer.disconnected) {
+        alert("El peer no está conectado todavía. Espera unos segundos y vuelve a intentar.");
+        return;
+    }
 
     const call = peer.call(idDestino, localStream);
     gestionarStream(call);
 }
 
 function gestionarStream(call) {
+    currentCall = call;
+
     call.on('stream', (remoteStream) => {
-        if (document.getElementById('remote-audio')) return;
-        const audio = document.createElement('audio');
-        audio.id = 'remote-audio';
+        let audio = document.getElementById('remote-audio');
+
+        if (!audio) {
+            audio = document.createElement('audio');
+            audio.id = 'remote-audio';
+            audio.autoplay = true;
+            audio.controls = true;
+            audio.setAttribute('playsinline', 'true');
+            document.getElementById('audios').appendChild(audio);
+        }
+
         audio.srcObject = remoteStream;
-        audio.autoplay = true;
-        audio.controls = true;
-        audio.setAttribute('playsinline', 'true');
-        document.getElementById('audios').appendChild(audio);
+    });
+
+    call.on('close', () => {
+        const audio = document.getElementById('remote-audio');
+        if (audio) audio.remove();
     });
 }
