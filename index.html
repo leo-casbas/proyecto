@@ -2,87 +2,107 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hub P2P de Audio</title>
     <style>
         body { font-family: sans-serif; text-align: center; padding: 20px; background: #f4f4f9; }
-        .container { max-width: 400px; margin: auto; background: white; padding: 20px; border-radius: 8px; shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .container { max-width: 400px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         input { width: 80%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; }
-        button { padding: 10px 20px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
-        button:hover { background: #0056b3; }
+        button { padding: 10px 20px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; margin: 5px; }
         #status { margin-top: 15px; font-weight: bold; color: #555; }
-        .audio-list { margin-top: 20px; text-align: left; }
+        .audio-list { margin-top: 20px; }
+        audio { width: 100%; margin-top: 10px; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h2>Hub de Audio P2P</h2>
-    <p>Tu ID: <span id="my-id">...</span></p>
-    
+    <p>Tu ID: <span id="my-id">Cargando...</span></p>
+
     <input type="text" id="remote-id" placeholder="ID del par a llamar">
     <button onclick="makeCall()">Llamar</button>
-    
-    <div id="status">Esperando conexión...</div>
+
+    <div id="status">Esperando micrófono...</div>
     <div class="audio-list" id="audios"></div>
 </div>
 
-<!-- Incluimos la librería PeerJS desde un CDN -->
+<!-- LIBRERÍA CORRECTA CON HTTPS -->
 <script src="https://unpkg.com"></script>
 
 <script>
     const statusDiv = document.getElementById('status');
-const audioContainer = document.getElementById('audios');
-const roomName = "SALA-PRUEBA-123"; // Todos los que tengan este nombre entrarán a la misma sala
-let localStream;
-let peersConectados = {};
+    const audioContainer = document.getElementById('audios');
+    const myIdDisplay = document.getElementById('my-id');
+    let localStream;
+    let peer;
 
-// 1. Obtener Micrófono
-navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-    localStream = stream;
-    
-    // 2. Unirse a la sala con un ID personalizado: "SALA-PRUEBA-123_UsuarioID"
-    const myId = roomName + "_" + Math.floor(Math.random() * 10000);
-    const peer = new Peer(myId);
+    // 1. Obtener micrófono (necesario antes de iniciar Peer en muchos móviles)
+    navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+            localStream = stream;
+            statusDiv.innerText = "Micrófono listo. Conectando a la red...";
+            iniciarPeer();
+        })
+        .catch(err => {
+            statusDiv.innerText = "Error de micrófono: " + err;
+            console.error(err);
+        });
 
-    peer.on('open', (id) => {
-        statusDiv.innerText = "En línea en: " + roomName;
-        document.getElementById('my-id').innerText = id;
+    function iniciarPeer() {
+        // 2. Inicializar PeerJS
+        peer = new Peer();
+
+        peer.on('open', id => {
+            myIdDisplay.innerText = id;
+            statusDiv.innerText = "En línea. Comparte tu ID para recibir llamadas.";
+        });
+
+        // 3. RECIBIR LLAMADAS
+        peer.on('call', call => {
+            statusDiv.innerText = "Recibiendo llamada...";
+            call.answer(localStream); // Contestamos con nuestro micrófono
+            gestionarStream(call);
+        });
+
+        peer.on('error', err => {
+            statusDiv.innerText = "Error: " + err.type;
+        });
+    }
+
+    // 4. REALIZAR LLAMADA
+    function makeCall() {
+        const remoteId = document.getElementById('remote-id').value;
+        if (!remoteId) return alert("Introduce un ID válido");
         
-        // 3. AUTO-DESCUBRIMIENTO:
-        // En un entorno real, aquí usarías una base de datos (como Firebase) 
-        // para listar quién está en la sala. 
-        // Para este ejemplo, puedes añadir un botón "Escanear Sala" o 
-        // conectar manualmente con el ID que te pasen.
-    });
-
-    // 4. ESCUCHAR LLAMADAS ENTRANTES
-    peer.on('call', call => {
-        call.answer(localStream);
-        gestionarStreamEntrante(call);
-    });
-
-    // Función para conectar con alguien
-    window.conectarAPar = (remoteId) => {
-        if (remoteId === myId || peersConectados[remoteId]) return;
+        statusDiv.innerText = "Llamando...";
         const call = peer.call(remoteId, localStream);
-        gestionarStreamEntrante(call);
-    };
+        gestionarStream(call);
+    }
 
-}).catch(err => statusDiv.innerText = "Error de mic: " + err);
+    // 5. MANEJAR EL AUDIO ENTRANTE
+    function gestionarStream(call) {
+        call.on('stream', remoteStream => {
+            // Si ya existe el audio de esta persona, no lo duplicamos
+            if (document.getElementById(call.peer)) return;
 
-function gestionarStreamEntrante(call) {
-    call.on('stream', remoteStream => {
-        if (document.getElementById(call.peer)) return;
-        
-        const audio = document.createElement('audio');
-        audio.id = call.peer;
-        audio.srcObject = remoteStream;
-        audio.autoplay = true;
-        audioContainer.appendChild(audio);
-        peersConectados[call.peer] = call;
-    });
-}
+            const audio = document.createElement('audio');
+            audio.id = call.peer;
+            audio.srcObject = remoteStream;
+            audio.autoplay = true;
+            audio.controls = true;
+            audio.setAttribute('playsinline', 'true'); // Crucial para móviles
+            
+            audioContainer.appendChild(audio);
+            statusDiv.innerText = "Conectado con otro par";
+        });
 
+        call.on('close', () => {
+            const el = document.getElementById(call.peer);
+            if (el) el.remove();
+            statusDiv.innerText = "Conexión cerrada.";
+        });
+    }
 </script>
 </body>
 </html>
