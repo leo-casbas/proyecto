@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FM VICTORIA - Finalizar Llamada</title>
+    <title>Hub P2P Audio - Finalizar Llamada</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; text-align: center; padding: 20px; background: #f0f2f5; }
         .container { max-width: 450px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        .my-id-box { background: #e7f3ff; padding: 10px; border-radius: 5px; margin: 15px 0; font-weight: bold; color: #007bff; border: 1px dashed #007bff; }
-        input { width: 90%; padding: 12px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 6px; }
+        .my-id-box { background: #e7f3ff; padding: 10px; border-radius: 5px; margin: 15px 0; font-weight: bold; color: #007bff; border: 1px dashed #007bff; cursor: pointer; }
+        input { width: 90%; padding: 12px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
         button { padding: 12px; cursor: pointer; border: none; border-radius: 6px; font-size: 16px; width: 100%; margin-bottom: 10px; transition: 0.3s; }
         .btn-call { background: #28a745; color: white; }
-        .btn-hangup { background: #dc3545; color: white; display: none; } /* Oculto hasta que haya llamada */
+        .btn-hangup { background: #dc3545; color: white; display: none; }
         .btn-mic { background: #007bff; color: white; }
         #status { margin-top: 15px; font-size: 0.9em; color: #666; }
     </style>
@@ -19,18 +19,16 @@
 <body>
 
 <div class="container">
-    <h2>Hub de Audio P2P</h2>
+    <h2>FM VICTORIA 103.</h2>
     
-    <!-- PASO 1: Activar Micrófono -->
     <div id="setup-step">
         <p>Haz clic para iniciar el sistema:</p>
         <button class="btn-mic" onclick="activarMicofono()">Activar Micrófono</button>
     </div>
 
-    <!-- PASO 2: Panel de Control -->
     <div id="main-step" style="display:none;">
-        <p>Tu ID de conexión:</p>
-        <div class="my-id-box" id="my-id">Generando...</div>
+        <p>Tu ID de conexión (toca para copiar):</p>
+        <div class="my-id-box" id="my-id" onclick="copiarID()">Generando...</div>
 
         <input type="text" id="remote-id" placeholder="ID de la otra persona">
         
@@ -42,7 +40,7 @@
     </div>
 </div>
 
-<!-- Librería PeerJS -->
+<!-- LIBRERÍA CORREGIDA - Ruta completa necesaria -->
 <script src="https://unpkg.com"></script>
 
 <script>
@@ -53,24 +51,33 @@
     
     let localStream;
     let peer;
-    let currentCall; // Guardamos la llamada activa aquí
+    let currentCall;
 
     async function activarMicofono() {
         try {
+            // Solicitar micrófono
             localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            
+            // Mostrar panel principal
             document.getElementById('setup-step').style.display = 'none';
             document.getElementById('main-step').style.display = 'block';
+            
+            // Inicializar PeerJS DESPUÉS de tener el micrófono
             inicializarPeer();
         } catch (err) {
-            alert("Error: Debes permitir el micrófono para usar la app.");
+            console.error(err);
+            alert("Error: Debes permitir el micrófono. Revisa los ajustes de tu navegador.");
         }
     }
 
     function inicializarPeer() {
+        // Creamos la instancia de Peer
         peer = new Peer();
 
         peer.on('open', (id) => {
+            console.log('ID generado:', id);
             document.getElementById('my-id').innerText = id;
+            statusDiv.innerText = "Listo para recibir llamadas";
         });
 
         peer.on('call', (call) => {
@@ -79,20 +86,24 @@
                 gestionarStream(call);
             }
         });
+
+        peer.on('error', (err) => {
+            console.error('Error en Peer:', err);
+            statusDiv.innerText = "Error: " + err.type;
+        });
     }
 
     function makeCall() {
         const rId = document.getElementById('remote-id').value;
         if (!rId) return alert("Ingresa un ID");
         
+        statusDiv.innerText = "Llamando...";
         const call = peer.call(rId, localStream);
         gestionarStream(call);
     }
 
     function gestionarStream(call) {
-        currentCall = call; // Registramos la llamada actual
-        
-        // Cambiamos los botones
+        currentCall = call;
         btnCall.style.display = "none";
         btnHangup.style.display = "block";
 
@@ -108,29 +119,32 @@
             statusDiv.innerText = "En llamada...";
         });
 
-        // Si el otro cuelga:
-        call.on('close', () => {
-            limpiarLlamada();
-        });
+        call.on('close', limpiarLlamada);
+        call.on('error', limpiarLlamada);
     }
 
     function hangUp() {
         if (currentCall) {
-            currentCall.close(); // Cerramos la conexión P2P
+            currentCall.close();
             limpiarLlamada();
         }
     }
 
     function limpiarLlamada() {
-        // Borrar el audio de la pantalla
         const audioEl = document.getElementById("remote-audio");
         if (audioEl) audioEl.remove();
 
-        // Resetear botones
         btnCall.style.display = "block";
         btnHangup.style.display = "none";
         statusDiv.innerText = "Llamada finalizada.";
         currentCall = null;
+    }
+
+    function copiarID() {
+        const idText = document.getElementById('my-id').innerText;
+        navigator.clipboard.writeText(idText).then(() => {
+            alert("ID copiado: " + idText);
+        });
     }
 </script>
 </body>
