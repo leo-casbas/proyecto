@@ -3,109 +3,107 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hub P2P Audio</title>
+    <title>Hub P2P de Audio</title>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #eceff1; padding: 20px; }
-        .card { max-width: 400px; margin: auto; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        button { background: #007bff; color: white; border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; margin: 5px; }
-        button:disabled { background: #ccc; }
-        input { padding: 10px; border: 1px solid #ddd; border-radius: 5px; width: 80%; }
-        #status { color: #d32f2f; margin: 15px 0; font-weight: bold; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding: 20px; background: #f0f2f5; color: #333; }
+        .container { max-width: 450px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h2 { color: #007bff; }
+        input { width: 90%; padding: 12px; margin: 15px 0; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; }
+        button { padding: 12px 25px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 6px; font-size: 16px; transition: 0.3s; width: 100%; margin-bottom: 10px; }
+        button:hover { background: #0056b3; }
+        #status { margin-top: 20px; font-weight: bold; padding: 10px; border-radius: 5px; background: #e9ecef; }
+        .audio-list { margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px; }
+        .my-id-box { background: #d4edda; padding: 10px; border-radius: 5px; margin: 10px 0; font-family: monospace; font-size: 1.1em; }
     </style>
 </head>
 <body>
 
-<div class="card">
+<div class="container">
     <h2>Hub de Audio P2P</h2>
     
-    <!-- PASO 1: Activar Micrófono -->
-    <div id="setup">
-        <p>Primero, activa tu micrófono:</p>
-        <button id="btn-mic">Permitir Micrófono</button>
+    <div id="setup-step">
+        <p>Para comenzar, habilita tu micrófono:</p>
+        <button onclick="activarMicofono()">Activar Micrófono</button>
     </div>
 
-    <!-- PASO 2: Panel de Conexión (oculto al inicio) -->
-    <div id="call-panel" style="display:none;">
-        <p>Tu ID: <strong id="my-id">Generando...</strong></p>
-        <input type="text" id="remote-id" placeholder="ID de la otra persona">
-        <button id="btn-call">Llamar</button>
-    </div>
+    <div id="main-step" style="display:none;">
+        <p>Tu ID para compartir:</p>
+        <div class="my-id-box" id="my-id">Generando...</div>
 
-    <div id="status">Esperando micrófono...</div>
-    <div id="audios"></div>
+        <input type="text" id="remote-id" placeholder="ID del amigo a llamar">
+        <button onclick="makeCall()">Llamar ahora</button>
+        
+        <div id="status">Conectado a la red</div>
+        <div class="audio-list" id="audios"></div>
+    </div>
 </div>
 
-<!-- LIBRERÍA CON HTTPS (Crítico para GitHub) -->
+<!-- LIBRERÍA CORRECTA -->
 <script src="https://unpkg.com"></script>
 
 <script>
-    const btnMic = document.getElementById('btn-mic');
-    const btnCall = document.getElementById('btn-call');
-    const status = document.getElementById('status');
-    const myIdDisplay = document.getElementById('my-id');
+    const statusDiv = document.getElementById('status');
+    const audioContainer = document.getElementById('audios');
     let localStream;
     let peer;
 
-    // 1. ACTIVAR MICRÓFONO Y LUEGO INICIAR PEER
-    btnMic.onclick = async () => {
+    // PASO 1: Activar Micrófono tras clic (Requerido por móviles)
+    async function activarMicofono() {
         try {
             localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            status.innerText = "Micrófono activo. Conectando...";
-            btnMic.disabled = true;
-            iniciarPeer();
+            document.getElementById('setup-step').style.display = 'none';
+            document.getElementById('main-step').style.display = 'block';
+            inicializarPeer();
         } catch (err) {
-            status.innerText = "Error: No se pudo acceder al micrófono.";
-            console.error(err);
+            alert("No se pudo acceder al micrófono: " + err);
         }
-    };
+    }
 
-    function iniciarPeer() {
-        // Inicializa PeerJS
+    // PASO 2: Conectar a PeerJS
+    function inicializarPeer() {
         peer = new Peer();
 
         peer.on('open', (id) => {
-            myIdDisplay.innerText = id;
-            status.innerText = "Listo para hablar";
-            document.getElementById('setup').style.display = 'none';
-            document.getElementById('call-panel').style.display = 'block';
+            document.getElementById('my-id').innerText = id;
         });
 
-        peer.on('error', (err) => {
-            status.innerText = "Error de conexión: " + err.type;
-        });
-
-        // ESCUCHAR LLAMADA ENTRANTE
+        // Escuchar llamadas entrantes
         peer.on('call', (call) => {
-            status.innerText = "Recibiendo audio...";
+            statusDiv.innerText = "¡Llamada entrante!";
             call.answer(localStream);
             gestionarStream(call);
         });
+
+        peer.on('error', (err) => {
+            statusDiv.innerText = "Error: " + err.type;
+            console.error(err);
+        });
     }
 
-    // 2. REALIZAR LLAMADA
-    btnCall.onclick = () => {
-        const remoteId = document.getElementById('remote-id').value;
-        if (!remoteId) return alert("Pon un ID");
+    // PASO 3: Realizar llamada
+    function makeCall() {
+        const rId = document.getElementById('remote-id').value;
+        if (!rId) return alert("Ingresa un ID");
         
-        status.innerText = "Llamando...";
-        const call = peer.call(remoteId, localStream);
+        statusDiv.innerText = "Llamando a " + rId + "...";
+        const call = peer.call(rId, localStream);
         gestionarStream(call);
-    };
+    }
 
+    // PASO 4: Mostrar el audio en la pantalla
     function gestionarStream(call) {
         call.on('stream', (remoteStream) => {
-            // Crear el audio solo si no existe
-            if (!document.getElementById("audio-" + call.peer)) {
-                const audio = document.createElement('audio');
-                audio.id = "audio-" + call.peer;
-                audio.srcObject = remoteStream;
-                audio.autoplay = true;
-                audio.controls = true;
-                // Importante para móviles
-                audio.setAttribute('playsinline', 'true');
-                document.getElementById('audios').appendChild(audio);
-                status.innerText = "Conversando con: " + call.peer;
-            }
+            if (document.getElementById("audio-" + call.peer)) return;
+
+            const audio = document.createElement('audio');
+            audio.id = "audio-" + call.peer;
+            audio.srcObject = remoteStream;
+            audio.autoplay = true;
+            audio.controls = true;
+            audio.setAttribute('playsinline', 'true'); // Para iPhone
+            
+            audioContainer.appendChild(audio);
+            statusDiv.innerText = "En llamada con: " + call.peer;
         });
     }
 </script>
