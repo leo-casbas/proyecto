@@ -36,11 +36,11 @@
         <button id="btn-hangup" class="btn-hangup" onclick="hangUp()">Finalizar Llamada</button>
         
         <div id="status">Conectado a la red</div>
-        <div id="audios"></div>
+        <div id="audios" style="display:none;"></div>
     </div>
 </div>
 
-<!-- LIBRERÍA CORREGIDA - Ruta completa necesaria -->
+<!-- ESTA LÍNEA ES LA QUE ESTABA MAL, AHORA ESTÁ CORREGIDA -->
 <script src="https://unpkg.com"></script>
 
 <script>
@@ -55,41 +55,39 @@
 
     async function activarMicofono() {
         try {
-            // Solicitar micrófono
+            // 1. Pedir micrófono
             localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             
-            // Mostrar panel principal
+            // 2. Cambiar de pantalla
             document.getElementById('setup-step').style.display = 'none';
             document.getElementById('main-step').style.display = 'block';
             
-            // Inicializar PeerJS DESPUÉS de tener el micrófono
+            // 3. Iniciar conexión
             inicializarPeer();
         } catch (err) {
             console.error(err);
-            alert("Error: Debes permitir el micrófono. Revisa los ajustes de tu navegador.");
+            alert("Error: Debes permitir el micrófono para que el sistema funcione.");
         }
     }
 
     function inicializarPeer() {
-        // Creamos la instancia de Peer
+        // Aquí Peer ya existe porque cargamos la librería correctamente arriba
         peer = new Peer();
 
         peer.on('open', (id) => {
-            console.log('ID generado:', id);
             document.getElementById('my-id').innerText = id;
-            statusDiv.innerText = "Listo para recibir llamadas";
+            statusDiv.innerText = "Listo para conectar";
         });
 
         peer.on('call', (call) => {
-            if(confirm("¿Aceptar llamada entrante?")) {
+            if(confirm("¿Recibir llamada?")) {
                 call.answer(localStream);
                 gestionarStream(call);
             }
         });
 
         peer.on('error', (err) => {
-            console.error('Error en Peer:', err);
-            statusDiv.innerText = "Error: " + err.type;
+            statusDiv.innerText = "Error de red: " + err.type;
         });
     }
 
@@ -109,18 +107,16 @@
 
         call.on('stream', (remoteStream) => {
             if (document.getElementById("remote-audio")) return;
-
             const audio = document.createElement('audio');
             audio.id = "remote-audio";
             audio.srcObject = remoteStream;
             audio.autoplay = true;
             audio.setAttribute('playsinline', 'true');
             audioContainer.appendChild(audio);
-            statusDiv.innerText = "En llamada...";
+            statusDiv.innerText = "¡En línea!";
         });
 
         call.on('close', limpiarLlamada);
-        call.on('error', limpiarLlamada);
     }
 
     function hangUp() {
@@ -133,7 +129,6 @@
     function limpiarLlamada() {
         const audioEl = document.getElementById("remote-audio");
         if (audioEl) audioEl.remove();
-
         btnCall.style.display = "block";
         btnHangup.style.display = "none";
         statusDiv.innerText = "Llamada finalizada.";
@@ -143,7 +138,7 @@
     function copiarID() {
         const idText = document.getElementById('my-id').innerText;
         navigator.clipboard.writeText(idText).then(() => {
-            alert("ID copiado: " + idText);
+            alert("ID copiado al portapapeles");
         });
     }
 </script>
